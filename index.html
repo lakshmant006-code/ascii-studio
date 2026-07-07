@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCII Studio — dots & chars</title>
+<style>
+  :root {
+    --bg:#0d0d0f; --border:#26262a; --fg:#e6e6e9; --dim:#77777e; --accent:#fff;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:var(--bg); color:var(--fg);
+    font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;
+    min-height:100vh; display:flex; flex-direction:column;
+  }
+  header { padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:14px; letter-spacing:5px; font-weight:normal; }
+  header span { font-size:11px; color:var(--dim); }
+  main { flex:1; display:flex; min-height:0; }
+  #controls { width:248px; flex-shrink:0; border-right:1px solid var(--border);
+    padding:20px 18px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; }
+  #controls::-webkit-scrollbar { width:4px; } #controls::-webkit-scrollbar-thumb { background:var(--border); }
+  #stage { flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; padding:16px; }
+  canvas#out { max-width:100%; max-height:calc(100vh - 120px); image-rendering:pixelated; border-radius:6px; }
+
+  /* ---- minimal buttons ---- */
+  .btn {
+    background:transparent; color:var(--dim); border:1px solid var(--border);
+    padding:9px 12px; cursor:pointer; font-family:inherit; font-size:12px;
+    border-radius:8px; text-align:center; letter-spacing:.5px;
+    transition:color .18s, border-color .18s, background .18s;
+  }
+  .btn:hover { color:var(--fg); border-color:#4a4a52; }
+  .btn.active { background:var(--accent); color:#0d0d0f; border-color:var(--accent); }
+
+  /* ---- minimal sliders ---- */
+  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; cursor:pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height:2px; background:var(--border); border-radius:1px; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; width:12px; height:12px; margin-top:-5px;
+    background:var(--fg); border-radius:50%; transition:transform .15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { transform:scale(1.25); }
+  input[type=range]::-moz-range-track { height:2px; background:var(--border); border-radius:1px; }
+  input[type=range]::-moz-range-thumb { width:12px; height:12px; border:none; background:var(--fg); border-radius:50%; }
+
+  label { font-size:10px; text-transform:lowercase; letter-spacing:1.5px; color:var(--dim); display:block; margin-bottom:2px; }
+  .val { float:right; color:var(--fg); }
+  .group { display:flex; flex-direction:column; gap:8px; }
+  .group + .group { border-top:1px solid var(--border); padding-top:18px; }
+  .row { display:flex; gap:8px; }
+  .row .btn { flex:1; }
+  #drop {
+    border:1px dashed var(--border); border-radius:8px; padding:16px 12px;
+    text-align:center; font-size:11px; color:var(--dim); cursor:pointer;
+    transition:color .2s, border-color .2s;
+  }
+  #drop:hover, #drop.over { border-color:var(--fg); color:var(--fg); }
+  input[type=color] { width:100%; height:30px; border:1px solid var(--border); border-radius:8px;
+    background:transparent; cursor:pointer; padding:3px; }
+  .swatch { width:100%; height:22px; border:1px solid var(--border); border-radius:6px; cursor:pointer;
+    transition:transform .15s, border-color .15s; }
+  .swatch:hover { border-color:var(--fg); transform:translateY(-2px); }
+  /* keep video rendering but invisible — display:none stops frame decoding in some browsers */
+  video { position:fixed; left:-9999px; top:0; width:2px; height:2px; opacity:0; pointer-events:none; }
+  @media (max-width:700px) {
+    main { flex-direction:column; }
+    #controls { width:100%; border-right:none; border-bottom:1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>ASCII STUDIO</h1>
+  <span style="font-size:12px;color:#777">upload a picture or go live from your camera</span>
+</header>
+<main>
+  <div id="controls">
+    <div class="group">
+      <div id="drop">click or drop an image here</div>
+      <input type="file" id="file" accept="image/*" hidden>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="camBtn">&#9679; live camera</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="flipBtn" title="switch front/back camera" style="display:none">flip cam</button>
+      </div>
+    </div>
+    <div class="group">
+      <label>style</label>
+      <div class="row">
+        <button class="btn active" data-mode="dots">dots</button>
+        <button class="btn" data-mode="chars">chars</button>
+      </div>
+    </div>
+    <div class="group">
+      <label>resolution <span class="val" id="widthVal">180</span></label>
+      <input type="range" id="width" min="40" max="600" value="180">
+      <label style="margin-top:10px">detail (sharpen) <span class="val" id="detailVal">0.8</span></label>
+      <input type="range" id="detail" min="0" max="3" step="0.1" value="0.8">
+      <label style="margin-top:10px">dot spacing <span class="val" id="cellVal">6</span></label>
+      <input type="range" id="cell" min="3" max="14" value="6">
+      <label style="margin-top:10px">dot size <span class="val" id="dotVal">0.65</span></label>
+      <input type="range" id="dot" min="0.2" max="1" step="0.05" value="0.65">
+      <label style="margin-top:10px">contrast <span class="val" id="contrastVal">1.3</span></label>
+      <input type="range" id="contrast" min="0.5" max="3" step="0.1" value="1.3">
+      <label style="margin-top:10px">brightness <span class="val" id="brightVal">0</span></label>
+      <input type="range" id="bright" min="-100" max="100" value="0">
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="invertBtn">invert</button>
+      </div>
+    </div>
+    <div class="group">
+      <label>colors</label>
+      <div class="row">
+        <div style="flex:1"><label>ink</label><input type="color" id="fgColor" value="#ffffff"></div>
+        <div style="flex:1"><label>background</label><input type="color" id="bgColor" value="#000000"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="swatch" data-fg="#ffffff" data-bg="#000000" style="background:linear-gradient(90deg,#000 50%,#fff 50%)" title="mono"></div>
+        <div class="swatch" data-fg="#33ff66" data-bg="#031104" style="background:linear-gradient(90deg,#031104 50%,#33ff66 50%)" title="terminal green"></div>
+        <div class="swatch" data-fg="#ffb000" data-bg="#160c00" style="background:linear-gradient(90deg,#160c00 50%,#ffb000 50%)" title="amber CRT"></div>
+        <div class="swatch" data-fg="#4dd8ff" data-bg="#020a12" style="background:linear-gradient(90deg,#020a12 50%,#4dd8ff 50%)" title="cyan"></div>
+        <div class="swatch" data-fg="#1a1a1a" data-bg="#f2ead9" style="background:linear-gradient(90deg,#f2ead9 50%,#1a1a1a 50%)" title="ink on paper"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="origBtn" title="tint each dot/char with the source pixel's color">original colors</button>
+      </div>
+    </div>
+    <div class="group">
+      <button class="btn" id="saveBtn" style="width:100%">save PNG</button>
+      <button class="btn" id="saveTxtBtn" style="width:100%;margin-top:8px">copy text (chars mode)</button>
+    </div>
+    <div style="font-size:11px;color:#666">tip: camera + processing all run locally in your browser; nothing is uploaded anywhere.</div>
+  </div>
+  <div id="stage"><canvas id="out"></canvas></div>
+</main>
+<video id="video" autoplay playsinline muted></video>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+// ---------- state ----------
+const S = {
+  mode: 'dots',
+  width: 180,
+  detail: 0.8,           // unsharp-mask strength
+  cell: 6,               // dots mode: px per grid cell
+  dotScale: 0.65,        // dot diameter as fraction of cell
+  fg: '#ffffff',
+  bg: '#000000',
+  originalColors: false, // tint dots/chars with source pixel color
+  contrast: 1.3,
+  brightness: 0,
+  invert: false,
+  source: null,          // 'image' | 'camera'
+  img: null,             // HTMLImageElement
+  stream: null,
+  facing: 'user',
+  lastLines: [],         // chars-mode text for copy
+};
+
+// 8x8 Bayer matrix (0..63)
+const BAYER8 = [
+  [ 0,32, 8,40, 2,34,10,42],[48,16,56,24,50,18,58,26],
+  [12,44, 4,36,14,46, 6,38],[60,28,52,20,62,30,54,22],
+  [ 3,35,11,43, 1,33, 9,41],[51,19,59,27,49,17,57,25],
+  [15,47, 7,39,13,45, 5,37],[63,31,55,23,61,29,53,21],
+];
+const RAMP = ' .:-=+*#%@';
+
+const out = document.getElementById('out');
+const octx = out.getContext('2d');
+const video = document.getElementById('video');
+const work = document.createElement('canvas');     // downsample buffer
+const wctx = work.getContext('2d', { willReadFrequently: true });
+
+// ---------- core render ----------
+function gridSize(srcW, srcH) {
+  const cols = S.width;
+  const aspect = S.mode === 'chars' ? 0.5 : 1.0;   // chars are ~2x taller
+  const rows = Math.max(1, Math.round(srcH / srcW * cols * aspect));
+  return { cols, rows };
+}
+
+function boxBlur(src, cols, rows) {
+  // 3x3 box blur, used by the unsharp mask
+  const dst = new Float32Array(src.length);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      let sum = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy; if (yy < 0 || yy >= rows) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx; if (xx < 0 || xx >= cols) continue;
+          sum += src[yy * cols + xx]; n++;
+        }
+      }
+      dst[y * cols + x] = sum / n;
+    }
+  }
+  return dst;
+}
+
+function sample(srcEl, srcW, srcH, cols, rows, mirror) {
+  work.width = cols; work.height = rows;
+  wctx.save();
+  if (mirror) { wctx.translate(cols, 0); wctx.scale(-1, 1); }
+  wctx.drawImage(srcEl, 0, 0, srcW, srcH, 0, 0, cols, rows);
+  wctx.restore();
+  const d = wctx.getImageData(0, 0, cols, rows).data;
+  let luma = new Float32Array(cols * rows);
+  for (let i = 0, j = 0; i < luma.length; i++, j += 4) {
+    let v = 0.2126*d[j] + 0.7152*d[j+1] + 0.0722*d[j+2];
+    v = (v - 128) * S.contrast + 128 + S.brightness;   // contrast+brightness
+    if (S.invert) v = 255 - v;
+    luma[i] = v;
+  }
+  if (S.detail > 0) {                                   // unsharp mask
+    const blur = boxBlur(luma, cols, rows);
+    for (let i = 0; i < luma.length; i++)
+      luma[i] = luma[i] + S.detail * (luma[i] - blur[i]);
+  }
+  for (let i = 0; i < luma.length; i++)
+    luma[i] = Math.max(0, Math.min(255, luma[i]));
+  return { luma, rgb: d };                              // rgb for original-colors mode
+}
+
+function pixelColor(rgb, i, boost = 1.6) {
+  // brighten source color so dots stay visible on dark bg
+  const j = i * 4;
+  const r = Math.min(255, rgb[j] * boost) | 0;
+  const g = Math.min(255, rgb[j+1] * boost) | 0;
+  const b = Math.min(255, rgb[j+2] * boost) | 0;
+  return `rgb(${r},${g},${b})`;
+}
+
+function renderDots(luma, rgb, cols, rows) {
+  const cell = S.cell, r = Math.max(0.6, cell * S.dotScale / 2);
+  out.width = cols * cell; out.height = rows * cell;
+  octx.fillStyle = S.bg; octx.fillRect(0, 0, out.width, out.height);
+  octx.fillStyle = S.fg;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      const t = (BAYER8[y & 7][x & 7] + 0.5) * 4;
+      if (luma[i] > t) {
+        if (S.originalColors) octx.fillStyle = pixelColor(rgb, i);
+        octx.beginPath();
+        octx.arc(x*cell + cell/2, y*cell + cell/2, r, 0, 6.2832);
+        octx.fill();
+      }
+    }
+  }
+}
+
+function renderChars(luma, rgb, cols, rows) {
+  const cw = 8, ch = 14;
+  out.width = cols * cw; out.height = rows * ch;
+  octx.fillStyle = S.bg; octx.fillRect(0, 0, out.width, out.height);
+  octx.fillStyle = S.fg;
+  octx.font = ch + 'px ui-monospace, Consolas, monospace';
+  octx.textBaseline = 'top';
+  S.lastLines = [];
+  for (let y = 0; y < rows; y++) {
+    let line = '';
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      const c = RAMP[Math.min(RAMP.length - 1, (luma[i] * RAMP.length / 256) | 0)];
+      line += c;
+      if (S.originalColors && c !== ' ') {
+        octx.fillStyle = pixelColor(rgb, i, 1.4);
+        octx.fillText(c, x * cw, y * ch);
+      }
+    }
+    S.lastLines.push(line);
+    if (!S.originalColors) { octx.fillStyle = S.fg; octx.fillText(line, 0, y * ch); }
+  }
+}
+
+function renderFrame(srcEl, srcW, srcH, mirror) {
+  if (!srcW || !srcH) return;
+  const { cols, rows } = gridSize(srcW, srcH);
+  const { luma, rgb } = sample(srcEl, srcW, srcH, cols, rows, mirror);
+  (S.mode === 'dots' ? renderDots : renderChars)(luma, rgb, cols, rows);
+}
+
+function renderStill() {
+  if (S.source === 'image' && S.img)
+    renderFrame(S.img, S.img.naturalWidth, S.img.naturalHeight, false);
+}
+
+// ---------- camera loop ----------
+let rafId = null;
+function camLoop() {
+  if (S.source !== 'camera') return;
+  if (video.readyState >= 2)
+    renderFrame(video, video.videoWidth, video.videoHeight, S.facing === 'user');
+  rafId = requestAnimationFrame(camLoop);
+}
+
+async function startCamera() {
+  stopCamera();
+  try {
+    S.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: S.facing, width: { ideal: 1280 } }, audio: false
+    });
+  } catch (e) {
+    alert('Camera unavailable: ' + e.message);
+    return;
+  }
+  video.srcObject = S.stream;
+  // wait for real frames before starting the loop
+  await new Promise(res => {
+    if (video.readyState >= 2) return res();
+    video.onloadeddata = res;
+  });
+  try { await video.play(); } catch (e) { /* already playing */ }
+  S.source = 'camera';
+  camBtn.classList.add('active');
+  camBtn.textContent = '■ stop camera';
+  flipBtn.style.display = '';
+  camLoop();
+}
+
+function stopCamera() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+  if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+  camBtn.classList.remove('active');
+  camBtn.textContent = '● live camera';
+  flipBtn.style.display = 'none';
+  if (S.source === 'camera') S.source = S.img ? 'image' : null;
+  renderStill();
+}
+
+// ---------- inputs ----------
+const drop = document.getElementById('drop');
+const file = document.getElementById('file');
+const camBtn = document.getElementById('camBtn');
+const flipBtn = document.getElementById('flipBtn');
+
+function loadImage(f) {
+  if (!f || !f.type.startsWith('image/')) return;
+  const img = new Image();
+  img.onload = () => {
+    stopCamera();
+    S.img = img; S.source = 'image';
+    renderStill();
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(f);
+}
+drop.onclick = () => file.click();
+file.onchange = () => loadImage(file.files[0]);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); loadImage(e.dataTransfer.files[0]); };
+document.onpaste = e => {
+  for (const it of e.clipboardData.items)
+    if (it.type.startsWith('image/')) { loadImage(it.getAsFile()); break; }
+};
+
+camBtn.onclick = () => S.source === 'camera' ? stopCamera() : startCamera();
+flipBtn.onclick = () => { S.facing = S.facing === 'user' ? 'environment' : 'user'; startCamera(); };
+
+// mode toggle
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-mode]').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  S.mode = b.dataset.mode;
+  renderStill();
+});
+
+// sliders
+function bindSlider(id, key, valId, fmt = v => v) {
+  const el = document.getElementById(id), val = document.getElementById(valId);
+  el.oninput = () => { S[key] = +el.value; val.textContent = fmt(el.value); renderStill(); };
+}
+bindSlider('width', 'width', 'widthVal');
+bindSlider('detail', 'detail', 'detailVal');
+bindSlider('cell', 'cell', 'cellVal');
+bindSlider('dot', 'dotScale', 'dotVal');
+bindSlider('contrast', 'contrast', 'contrastVal');
+bindSlider('bright', 'brightness', 'brightVal');
+
+// colors
+const fgColor = document.getElementById('fgColor');
+const bgColor = document.getElementById('bgColor');
+fgColor.oninput = () => { S.fg = fgColor.value; renderStill(); };
+bgColor.oninput = () => { S.bg = bgColor.value; renderStill(); };
+document.querySelectorAll('.swatch').forEach(sw => sw.onclick = () => {
+  S.fg = fgColor.value = sw.dataset.fg;
+  S.bg = bgColor.value = sw.dataset.bg;
+  renderStill();
+});
+document.getElementById('origBtn').onclick = e => {
+  S.originalColors = !S.originalColors;
+  e.target.classList.toggle('active', S.originalColors);
+  renderStill();
+};
+document.getElementById('invertBtn').onclick = e => {
+  S.invert = !S.invert;
+  e.target.classList.toggle('active', S.invert);
+  renderStill();
+};
+
+// save / copy
+document.getElementById('saveBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.download = 'ascii-art.png';
+  a.href = out.toDataURL('image/png');
+  a.click();
+};
+document.getElementById('saveTxtBtn').onclick = async e => {
+  if (S.mode !== 'chars' || !S.lastLines.length) { alert('Switch to chars mode first.'); return; }
+  await navigator.clipboard.writeText(S.lastLines.join('\n'));
+  e.target.textContent = 'copied!';
+  setTimeout(() => e.target.textContent = 'copy text (chars mode)', 1200);
+};
+
+// ---------- GSAP UI animations ----------
+if (window.gsap) {
+  // entrance: quiet upward fade, groups staggered
+  gsap.from('header', { opacity: 0, y: -8, duration: .5, ease: 'power2.out' });
+  gsap.from('#controls .group', { opacity: 0, y: 14, duration: .5, stagger: .07, delay: .1, ease: 'power2.out' });
+  gsap.from('#stage', { opacity: 0, duration: .8, delay: .25, ease: 'power2.out' });
+
+  // button / swatch press: soft snap-back
+  document.querySelectorAll('.btn, .swatch').forEach(b =>
+    b.addEventListener('click', () =>
+      gsap.fromTo(b, { scale: .95 }, { scale: 1, duration: .3, ease: 'back.out(2.5)' })));
+
+  // slider value pop while dragging
+  document.querySelectorAll('input[type=range]').forEach(sl =>
+    sl.addEventListener('input', () => {
+      const badge = sl.parentElement.querySelector('.val') || sl.previousElementSibling?.querySelector('.val');
+      if (badge) gsap.fromTo(badge, { scale: 1.25 }, { scale: 1, duration: .25, ease: 'power2.out',
+        transformOrigin: 'right center', overwrite: 'auto' });
+    }));
+
+  // canvas cross-fade on discrete changes (mode / image / palette / invert) — not per camera frame
+  window.fxCanvas = () => gsap.fromTo('#out', { opacity: .3 },
+    { opacity: 1, duration: .4, ease: 'power2.out', overwrite: 'auto' });
+  document.querySelectorAll('[data-mode], .swatch, #invertBtn, #origBtn').forEach(el =>
+    el.addEventListener('click', fxCanvas));
+  const _loadImage = loadImage;   // fade when a new picture lands
+  loadImage = f => { _loadImage(f); fxCanvas(); };
+
+  // camera button: gentle breathing pulse while live
+  const camPulse = gsap.to('#camBtn', { opacity: .55, duration: .9, yoyo: true,
+    repeat: -1, ease: 'sine.inOut', paused: true });
+  new MutationObserver(() =>
+    camBtn.classList.contains('active') ? camPulse.play() : (camPulse.pause(0), gsap.set('#camBtn', { opacity: 1 }))
+  ).observe(camBtn, { attributes: true, attributeFilter: ['class'] });
+}
+</script>
+</body>
+</html>
