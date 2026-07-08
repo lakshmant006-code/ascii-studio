@@ -80,8 +80,8 @@
 <main>
   <div id="controls">
     <div class="group">
-      <div id="drop">click or drop an image here</div>
-      <input type="file" id="file" accept="image/*" hidden>
+      <div id="drop">click or drop an image or video here</div>
+      <input type="file" id="file" accept="image/*,video/*" hidden>
       <div class="row" style="margin-top:4px">
         <button class="btn" id="camBtn">&#9679; live camera</button>
       </div>
@@ -155,11 +155,12 @@ const S = {
   contrast: 1.3,
   brightness: 0,
   invert: false,
-  source: null,          // 'image' | 'camera'
+  source: null,          // 'image' | 'camera' | 'video'
   img: null,             // HTMLImageElement
   stream: null,
   facing: 'user',
   lastLines: [],         // chars-mode text for copy
+  videoFileUrl: null,    // object URL for dropped/selected video file
 };
 
 // 8x8 Bayer matrix (0..63)
@@ -292,17 +293,19 @@ function renderStill() {
     renderFrame(S.img, S.img.naturalWidth, S.img.naturalHeight, false);
 }
 
-// ---------- camera loop ----------
+// ---------- live loop (camera + video file) ----------
 let rafId = null;
-function camLoop() {
-  if (S.source !== 'camera') return;
-  if (video.readyState >= 2)
-    renderFrame(video, video.videoWidth, video.videoHeight, S.facing === 'user');
-  rafId = requestAnimationFrame(camLoop);
+function liveLoop() {
+  if (S.source !== 'camera' && S.source !== 'video') return;
+  if (video.readyState >= 2) {
+    const mirror = S.source === 'camera' && S.facing === 'user';
+    renderFrame(video, video.videoWidth, video.videoHeight, mirror);
+  }
+  rafId = requestAnimationFrame(liveLoop);
 }
 
 async function startCamera() {
-  stopCamera();
+  stopLive();
   try {
     S.stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: S.facing, width: { ideal: 1280 } }, audio: false
@@ -312,7 +315,6 @@ async function startCamera() {
     return;
   }
   video.srcObject = S.stream;
-  // wait for real frames before starting the loop
   await new Promise(res => {
     if (video.readyState >= 2) return res();
     video.onloadeddata = res;
@@ -322,17 +324,36 @@ async function startCamera() {
   camBtn.classList.add('active');
   camBtn.textContent = '■ stop camera';
   flipBtn.style.display = '';
-  camLoop();
+  liveLoop();
 }
 
-function stopCamera() {
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = null;
+function loadVideoFile(f) {
+  stopLive();
+  if (S.videoFileUrl) { URL.revokeObjectURL(S.videoFileUrl); S.videoFileUrl = null; }
+  S.videoFileUrl = URL.createObjectURL(f);
+  video.srcObject = null;
+  video.src = S.videoFileUrl;
+  video.loop = true;
+  video.onloadedmetadata = async () => {
+    try { await video.play(); } catch (e) { /* blocked */ }
+    S.source = 'video';
+    camBtn.textContent = '● live camera';
+    camBtn.classList.remove('active');
+    flipBtn.style.display = 'none';
+    liveLoop();
+  };
+}
+
+function stopLive() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
   if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+  video.pause();
+  video.srcObject = null;
+  if (S.videoFileUrl) { URL.revokeObjectURL(S.videoFileUrl); S.videoFileUrl = null; video.src = ''; }
   camBtn.classList.remove('active');
   camBtn.textContent = '● live camera';
   flipBtn.style.display = 'none';
-  if (S.source === 'camera') S.source = S.img ? 'image' : null;
+  if (S.source === 'camera' || S.source === 'video') S.source = S.img ? 'image' : null;
   renderStill();
 }
 
@@ -342,28 +363,33 @@ const file = document.getElementById('file');
 const camBtn = document.getElementById('camBtn');
 const flipBtn = document.getElementById('flipBtn');
 
-function loadImage(f) {
-  if (!f || !f.type.startsWith('image/')) return;
+function loadFile(f) {
+  if (!f) return;
+  if (f.type.startsWith('video/')) { loadVideoFile(f); return; }
+  if (!f.type.startsWith('image/')) return;
   const img = new Image();
   img.onload = () => {
-    stopCamera();
+    stopLive();
     S.img = img; S.source = 'image';
     renderStill();
     URL.revokeObjectURL(img.src);
   };
   img.src = URL.createObjectURL(f);
 }
+// keep legacy name so GSAP wrapper below still works
+const loadImage = loadFile;
+
 drop.onclick = () => file.click();
-file.onchange = () => loadImage(file.files[0]);
+file.onchange = () => loadFile(file.files[0]);
 drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
 drop.ondragleave = () => drop.classList.remove('over');
-drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); loadImage(e.dataTransfer.files[0]); };
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); loadFile(e.dataTransfer.files[0]); };
 document.onpaste = e => {
   for (const it of e.clipboardData.items)
-    if (it.type.startsWith('image/')) { loadImage(it.getAsFile()); break; }
+    if (it.type.startsWith('image/') || it.type.startsWith('video/')) { loadFile(it.getAsFile()); break; }
 };
 
-camBtn.onclick = () => S.source === 'camera' ? stopCamera() : startCamera();
+camBtn.onclick = () => (S.source === 'camera' || S.source === 'video') ? stopLive() : startCamera();
 flipBtn.onclick = () => { S.facing = S.facing === 'user' ? 'environment' : 'user'; startCamera(); };
 
 // mode toggle
@@ -446,12 +472,17 @@ if (window.gsap) {
     { opacity: 1, duration: .4, ease: 'power2.out', overwrite: 'auto' });
   document.querySelectorAll('[data-mode], .swatch, #invertBtn, #origBtn').forEach(el =>
     el.addEventListener('click', fxCanvas));
-  const _loadImage = loadImage;   // fade when a new picture lands
-  loadImage = f => { _loadImage(f); fxCanvas(); };
+  // fade when a new picture or video lands
+  drop.addEventListener('drop', fxCanvas);
+  file.addEventListener('change', fxCanvas);
 
   // camera button: gentle breathing pulse while live
   const camPulse = gsap.to('#camBtn', { opacity: .55, duration: .9, yoyo: true,
     repeat: -1, ease: 'sine.inOut', paused: true });
   new MutationObserver(() =>
     camBtn.classList.contains('active') ? camPulse.play() : (camPulse.pause(0), gsap.set('#camBtn', { opacity: 1 }))
-  ).observe(camBtn, { attributes: true, attribu
+  ).observe(camBtn, { attributes: true, attributeFilter: ['class'] });
+}
+</script>
+</body>
+</html>
