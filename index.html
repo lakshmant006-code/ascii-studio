@@ -9,33 +9,35 @@
     --bg:#0d0d0f; --border:#26262a; --fg:#e6e6e9; --dim:#77777e; --accent:#fff;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; overflow:hidden; }
   body {
     background:var(--bg); color:var(--fg);
     font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;
-    min-height:100vh; display:flex; flex-direction:column;
+    display:flex; flex-direction:column;
   }
-  header { padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
-  header h1 { font-size:14px; letter-spacing:5px; font-weight:normal; }
-  header span { font-size:11px; color:var(--dim); }
-  main { flex:1; display:flex; min-height:0; }
-  #controls { width:248px; flex-shrink:0; border-right:1px solid var(--border);
-    padding:20px 18px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; }
+  header { padding:8px 16px; border-bottom:1px solid var(--border); display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; flex-shrink:0; }
+  header h1 { font-size:13px; letter-spacing:5px; font-weight:normal; }
+  header span { font-size:10px; color:var(--dim); }
+  main { flex:1; display:flex; min-height:0; overflow:hidden; }
+  #controls { width:238px; flex-shrink:0; border-right:1px solid var(--border);
+    padding:10px 14px; display:flex; flex-direction:column; gap:9px;
+    overflow-y:auto; height:100%; position:sticky; top:0; }
   #controls::-webkit-scrollbar { width:4px; } #controls::-webkit-scrollbar-thumb { background:var(--border); }
-  #stage { flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; padding:16px; }
-  canvas#out { max-width:100%; max-height:calc(100vh - 120px); image-rendering:pixelated; border-radius:6px; }
+  #stage { flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:8px; }
+  canvas#out { max-width:100%; max-height:calc(100vh - 58px); image-rendering:pixelated; border-radius:6px; }
 
   /* ---- minimal buttons ---- */
   .btn {
     background:transparent; color:var(--dim); border:1px solid var(--border);
-    padding:9px 12px; cursor:pointer; font-family:inherit; font-size:12px;
-    border-radius:8px; text-align:center; letter-spacing:.5px;
+    padding:6px 10px; cursor:pointer; font-family:inherit; font-size:11px;
+    border-radius:7px; text-align:center; letter-spacing:.5px;
     transition:color .18s, border-color .18s, background .18s;
   }
   .btn:hover { color:var(--fg); border-color:#4a4a52; }
   .btn.active { background:var(--accent); color:#0d0d0f; border-color:var(--accent); }
 
   /* ---- minimal sliders ---- */
-  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; cursor:pointer; }
+  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:15px; background:transparent; cursor:pointer; }
   input[type=range]::-webkit-slider-runnable-track { height:2px; background:var(--border); border-radius:1px; }
   input[type=range]::-webkit-slider-thumb {
     -webkit-appearance:none; width:12px; height:12px; margin-top:-5px;
@@ -45,21 +47,21 @@
   input[type=range]::-moz-range-track { height:2px; background:var(--border); border-radius:1px; }
   input[type=range]::-moz-range-thumb { width:12px; height:12px; border:none; background:var(--fg); border-radius:50%; }
 
-  label { font-size:10px; text-transform:lowercase; letter-spacing:1.5px; color:var(--dim); display:block; margin-bottom:2px; }
+  label { font-size:10px; text-transform:lowercase; letter-spacing:1.5px; color:var(--dim); display:block; margin-bottom:1px; }
   .val { float:right; color:var(--fg); }
-  .group { display:flex; flex-direction:column; gap:8px; }
-  .group + .group { border-top:1px solid var(--border); padding-top:18px; }
+  .group { display:flex; flex-direction:column; gap:6px; }
+  .group + .group { border-top:1px solid var(--border); padding-top:9px; }
   .row { display:flex; gap:8px; }
   .row .btn { flex:1; }
   #drop {
-    border:1px dashed var(--border); border-radius:8px; padding:16px 12px;
-    text-align:center; font-size:11px; color:var(--dim); cursor:pointer;
+    border:1px dashed var(--border); border-radius:7px; padding:9px 10px;
+    text-align:center; font-size:10px; color:var(--dim); cursor:pointer;
     transition:color .2s, border-color .2s;
   }
   #drop:hover, #drop.over { border-color:var(--fg); color:var(--fg); }
-  input[type=color] { width:100%; height:30px; border:1px solid var(--border); border-radius:8px;
-    background:transparent; cursor:pointer; padding:3px; }
-  .swatch { width:100%; height:22px; border:1px solid var(--border); border-radius:6px; cursor:pointer;
+  input[type=color] { width:100%; height:24px; border:1px solid var(--border); border-radius:7px;
+    background:transparent; cursor:pointer; padding:2px; }
+  .swatch { width:100%; height:18px; border:1px solid var(--border); border-radius:5px; cursor:pointer;
     transition:transform .15s, border-color .15s; }
   .swatch:hover { border-color:var(--fg); transform:translateY(-2px); }
   /* keep video rendering but invisible — display:none stops frame decoding in some browsers */
@@ -80,10 +82,10 @@
     <div class="group">
       <div id="drop">click or drop an image here</div>
       <input type="file" id="file" accept="image/*" hidden>
-      <div class="row" style="margin-top:8px">
+      <div class="row" style="margin-top:4px">
         <button class="btn" id="camBtn">&#9679; live camera</button>
       </div>
-      <div class="row" style="margin-top:8px">
+      <div class="row" style="margin-top:4px">
         <button class="btn" id="flipBtn" title="switch front/back camera" style="display:none">flip cam</button>
       </div>
     </div>
@@ -97,17 +99,17 @@
     <div class="group">
       <label>resolution <span class="val" id="widthVal">180</span></label>
       <input type="range" id="width" min="40" max="600" value="180">
-      <label style="margin-top:10px">detail (sharpen) <span class="val" id="detailVal">0.8</span></label>
+      <label style="margin-top:4px">detail (sharpen) <span class="val" id="detailVal">0.8</span></label>
       <input type="range" id="detail" min="0" max="3" step="0.1" value="0.8">
-      <label style="margin-top:10px">dot spacing <span class="val" id="cellVal">6</span></label>
+      <label style="margin-top:4px">dot spacing <span class="val" id="cellVal">6</span></label>
       <input type="range" id="cell" min="3" max="14" value="6">
-      <label style="margin-top:10px">dot size <span class="val" id="dotVal">0.65</span></label>
+      <label style="margin-top:4px">dot size <span class="val" id="dotVal">0.65</span></label>
       <input type="range" id="dot" min="0.2" max="1" step="0.05" value="0.65">
-      <label style="margin-top:10px">contrast <span class="val" id="contrastVal">1.3</span></label>
+      <label style="margin-top:4px">contrast <span class="val" id="contrastVal">1.3</span></label>
       <input type="range" id="contrast" min="0.5" max="3" step="0.1" value="1.3">
-      <label style="margin-top:10px">brightness <span class="val" id="brightVal">0</span></label>
+      <label style="margin-top:4px">brightness <span class="val" id="brightVal">0</span></label>
       <input type="range" id="bright" min="-100" max="100" value="0">
-      <div class="row" style="margin-top:10px">
+      <div class="row" style="margin-top:4px">
         <button class="btn" id="invertBtn">invert</button>
       </div>
     </div>
@@ -117,22 +119,22 @@
         <div style="flex:1"><label>ink</label><input type="color" id="fgColor" value="#ffffff"></div>
         <div style="flex:1"><label>background</label><input type="color" id="bgColor" value="#000000"></div>
       </div>
-      <div class="row" style="margin-top:8px">
+      <div class="row" style="margin-top:4px">
         <div class="swatch" data-fg="#ffffff" data-bg="#000000" style="background:linear-gradient(90deg,#000 50%,#fff 50%)" title="mono"></div>
         <div class="swatch" data-fg="#33ff66" data-bg="#031104" style="background:linear-gradient(90deg,#031104 50%,#33ff66 50%)" title="terminal green"></div>
         <div class="swatch" data-fg="#ffb000" data-bg="#160c00" style="background:linear-gradient(90deg,#160c00 50%,#ffb000 50%)" title="amber CRT"></div>
         <div class="swatch" data-fg="#4dd8ff" data-bg="#020a12" style="background:linear-gradient(90deg,#020a12 50%,#4dd8ff 50%)" title="cyan"></div>
         <div class="swatch" data-fg="#1a1a1a" data-bg="#f2ead9" style="background:linear-gradient(90deg,#f2ead9 50%,#1a1a1a 50%)" title="ink on paper"></div>
       </div>
-      <div class="row" style="margin-top:8px">
+      <div class="row" style="margin-top:4px">
         <button class="btn" id="origBtn" title="tint each dot/char with the source pixel's color">original colors</button>
       </div>
     </div>
     <div class="group">
       <button class="btn" id="saveBtn" style="width:100%">save PNG</button>
-      <button class="btn" id="saveTxtBtn" style="width:100%;margin-top:8px">copy text (chars mode)</button>
+      <button class="btn" id="saveTxtBtn" style="width:100%;margin-top:4px">copy text (chars mode)</button>
     </div>
-    <div style="font-size:11px;color:#666">tip: camera + processing all run locally in your browser; nothing is uploaded anywhere.</div>
+    <div style="font-size:9px;color:#555">everything runs locally — nothing is uploaded.</div>
   </div>
   <div id="stage"><canvas id="out"></canvas></div>
 </main>
@@ -452,8 +454,4 @@ if (window.gsap) {
     repeat: -1, ease: 'sine.inOut', paused: true });
   new MutationObserver(() =>
     camBtn.classList.contains('active') ? camPulse.play() : (camPulse.pause(0), gsap.set('#camBtn', { opacity: 1 }))
-  ).observe(camBtn, { attributes: true, attributeFilter: ['class'] });
-}
-</script>
-</body>
-</html>
+  ).observe(camBtn, { attributes: true, attribu
